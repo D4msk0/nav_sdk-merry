@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-04-21T00:23:16.873492324Z">
+        <DropdownSelection timestamp="2025-04-21T02:15:56.792781977Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=/home/merry/.android/avd/Medium_Phone.avd" />
+              <DeviceId pluginId="Default" identifier="serial=192.168.178.133:45295;connection=cc8b587d" />
             </handle>
           </Target>
         </DropdownSelection>

@@ -35,6 +35,16 @@ import com.google.android.libraries.navigation.Waypoint
 
 
 class MainActivity : AppCompatActivity() {
+
+    private val requestBluetoothPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                Toast.makeText(this, "Bluetooth-toestemming verleend", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Bluetooth-toestemming geweigerd", Toast.LENGTH_LONG).show()
+            }
+        }
+
     private var mNavigator: Navigator? = null
     private lateinit var navView: NavigationView
     private var arrivalListener: Navigator.ArrivalListener? = null
@@ -51,12 +61,44 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        checkBluetoothPermission()
+
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         navView = findViewById(R.id.navigation_view)
         navView.onCreate(savedInstanceState)
         requestAccessPermissions()
     }
+
+    private fun checkBluetoothPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Toestemming is al verleend
+                }
+
+                shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT) -> {
+                    Toast.makeText(
+                        this,
+                        "Bluetooth-connectie is nodig voor communicatie met de ESP32",
+                        Toast.LENGTH_LONG
+                    ).show()
+
+                    requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                }
+
+                else -> {
+                    // Vraag de permissie
+                    requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                }
+            }
+        }
+    }
+
 
     private fun requestAccessPermissions() {
         val permissions =
