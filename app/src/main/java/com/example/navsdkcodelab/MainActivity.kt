@@ -188,6 +188,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         navView.onDestroy()
+        mNavigator?.also { navigator ->
+            if (arrivalListener != null) {
+                navigator.removeArrivalListener(arrivalListener)
+            }
+            if (routeChangedListener != null) {
+                navigator.removeRouteChangedListener(routeChangedListener)
+            }
+            navigator.simulator?.unsetUserLocation()
+            navigator.cleanup()
+        }
+        mNavigator = null
         super.onDestroy()
     }
 
