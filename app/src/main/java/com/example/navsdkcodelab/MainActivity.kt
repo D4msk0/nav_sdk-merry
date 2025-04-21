@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.view.WindowManager
+import android.widget.Switch
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -52,8 +53,8 @@ class MainActivity : AppCompatActivity() {
 
     private var googleMap: GoogleMap? = null
 
-    private val isSimulationMode get() = true
-
+//    private val isSimulationMode get() = true
+    private var isSimulationMode: Boolean = false
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
 //        val startLocation = LatLng(49.2847001, -123.1145098)
@@ -64,6 +65,31 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val simulationSwitch = findViewById<Switch>(R.id.simulation_mode_switch)
+        simulationSwitch.setOnCheckedChangeListener { _, isChecked ->
+            isSimulationMode = isChecked
+            Toast.makeText(this, "Simulatie: ${if (isChecked) "Aan" else "Uit"}", Toast.LENGTH_SHORT).show()
+
+            // Alleen als navigator al bestaat
+            mNavigator?.let { navigator ->
+                try {
+                    navigator.stopGuidance()
+                    navigator.clearDestinations()
+
+                    if (isSimulationMode) {
+                        navigator.simulator?.setUserLocation(START_LOCATION)
+                    } else {
+                        navigator.simulator?.unsetUserLocation()
+                    }
+
+                    navigateToPlace(END_LOCATION)
+                } catch (e: Exception) {
+                    showToast("Fout bij herstarten navigatie: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
+        }
 
         checkBluetoothPermission()
 

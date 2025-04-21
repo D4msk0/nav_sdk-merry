@@ -81,36 +81,40 @@ class NavInfoReceivingService : Service() {
         private var lastInstruction: Int? = null
         private var lastDistance: Int? = null
         private var lastTimestamp: Long = 0
-        private val minIntervalMs = 1000L  // Minimum interval tussen berichten in milliseconden (bijv. 1 seconde)
+        private val minIntervalMs =
+            1000L  // Minimum interval tussen berichten in milliseconden (bijv. 1 seconde)
         private val destinationReachedThreshold = 1 // Drempel in meters voor bestemming bereikt
 
         override fun handleMessage(msg: Message) {
             if (msg.what == TurnByTurnManager.MSG_NAV_INFO) {
                 val navInfo = turnByTurnManager.readNavInfoFromBundle(msg.data)
 
-                val instruction = navInfo.currentStep.maneuver
-                val distanceToNextStep = navInfo.distanceToCurrentStepMeters.toInt()
-                val currentTimestamp = System.currentTimeMillis()
+                val step = navInfo.currentStep
+                if (step != null) {
+                    val instruction = step.maneuver
+                    val distanceToNextStep = navInfo.distanceToCurrentStepMeters.toInt()
+                    val currentTimestamp = System.currentTimeMillis()
 
-                // Controleer of er voldoende tijd is verstreken en of er een verandering is in instructie of afstand
-                if (currentTimestamp - lastTimestamp >= minIntervalMs &&
-                    (instruction != lastInstruction || distanceToNextStep != lastDistance)) {
+                    if (currentTimestamp - lastTimestamp >= minIntervalMs &&
+                        (instruction != lastInstruction || distanceToNextStep != lastDistance)
+                    ) {
 
-                    // Controleer of de bestemming bereikt is
-                    if (distanceToNextStep <= destinationReachedThreshold) {
-                        Log.d("NavService", "Bestemming bereikt!")
-                        sendNavInfoToESP32(-1, 0)  // Stuur een bericht dat de bestemming is bereikt
-                    } else {
-                        Log.d("NavService", "Richting: $instruction")
-                        Log.d("NavService", "Afstand tot volgende stap: $distanceToNextStep")
+                        if (distanceToNextStep <= destinationReachedThreshold) {
+                            Log.d("NavService", "Bestemming bereikt!")
+                            sendNavInfoToESP32(-1, 0)
+                        } else {
+                            Log.d("NavService", "Richting: $instruction")
+                            Log.d("NavService", "Afstand tot volgende stap: $distanceToNextStep")
 
-                        sendNavInfoToESP32(instruction, distanceToNextStep)
+                            sendNavInfoToESP32(instruction, distanceToNextStep)
+                        }
+
+                        lastInstruction = instruction
+                        lastDistance = distanceToNextStep
+                        lastTimestamp = currentTimestamp
                     }
-
-                    // Update de laatst verstuurde instructie, afstand en tijd
-                    lastInstruction = instruction
-                    lastDistance = distanceToNextStep
-                    lastTimestamp = currentTimestamp
+                } else {
+                    Log.w("NavService", "Ontvangen navInfo zonder currentStep.")
                 }
             }
         }

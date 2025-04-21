@@ -84,11 +84,11 @@ void handleInstruction(int instruction, int distance) {
 
   if (instruction == TURN_LEFT) {
     for (int i = 0; i < ledsToLight; i++) {
-      strip.setPixelColor(i, strip.Color(0, 80, 0));
+      strip.setPixelColor(i, strip.Color(30, 0, 0));
     }
   } else if (instruction == TURN_RIGHT) {
     for (int i = 0; i < ledsToLight; i++) {
-      strip.setPixelColor(NUM_LEDS - 1 - i, strip.Color(0, 80, 0));
+      strip.setPixelColor(NUM_LEDS - 1 - i, strip.Color(30, 0, 0));
     }
   } else {
     // fillSolid(strip.Color(50, 50, 50));
