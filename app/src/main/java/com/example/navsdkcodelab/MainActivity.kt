@@ -49,6 +49,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navView: NavigationView
     private var arrivalListener: Navigator.ArrivalListener? = null
     private var routeChangedListener: Navigator.RouteChangedListener? = null
+
+    private var googleMap: GoogleMap? = null
+
     private val isSimulationMode get() = true
 
     companion object {
@@ -213,53 +216,46 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun setupCameraFollowMyLocation() {
-        navView.getMapAsync { googleMap ->
-            googleMap.followMyLocation(GoogleMap.CameraPerspective.TILTED)
+        navView.getMapAsync { map ->
+            googleMap = map
+            map.followMyLocation(GoogleMap.CameraPerspective.TILTED)
+
+            // Alleen in normale modus (niet simulatie)
+            if (!isSimulationMode) {
+                // Bij klikken op de kaart wordt de eindlocatie ingesteld
+                map.setOnMapClickListener { latLng ->
+                    showToast("Klik op kaart: ${latLng.latitude}, ${latLng.longitude}")
+                    navigateToLatLng(latLng)  // Dit was de functie die we vervolgens aanriepen
+                }
+            }
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        navView.onStart()
-    }
+    private fun navigateToLatLng(latLng: LatLng) {
+        // Haal de latitude en longitude uit de Google Maps LatLng
+        val latitude = latLng.latitude
+        val longitude = latLng.longitude
 
-    override fun onResume() {
-        super.onResume()
-        navView.onResume()
-    }
+        // Stel de waypoint in met de juiste lat/long als Doubles
+        val waypoint = Waypoint.builder()
+            .setLatLng(latitude, longitude)  // Geef de lat/long als Double
+            .build()
 
-    override fun onPause() {
-        navView.onPause()
-        super.onPause()
-    }
+        val pendingRoute = mNavigator?.setDestination(waypoint)
 
-    override fun onConfigurationChanged(configuration: Configuration) {
-        super.onConfigurationChanged(configuration)
-        navView.onConfigurationChanged(configuration)
-    }
-
-    override fun onStop() {
-        navView.onStop()
-        super.onStop()
-    }
-
-    override fun onDestroy() {
-        navView.onDestroy()
-        mNavigator?.also { navigator ->
-            if (arrivalListener != null) {
-                navigator.removeArrivalListener(arrivalListener)
+        pendingRoute?.setOnResultListener { code ->
+            when (code) {
+                Navigator.RouteStatus.OK -> {
+                    supportActionBar?.hide()
+                    mNavigator?.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE)
+                    mNavigator?.startGuidance()
+                }
+                Navigator.RouteStatus.ROUTE_CANCELED -> showToast("Route guidance canceled.")
+                Navigator.RouteStatus.NO_ROUTE_FOUND,
+                Navigator.RouteStatus.NETWORK_ERROR -> showToast("Error starting guidance: $code")
+                else -> showToast("Error starting guidance: $code")
             }
-            if (routeChangedListener != null) {
-                navigator.removeRouteChangedListener(routeChangedListener)
-            }
-            navigator.simulator?.unsetUserLocation()
-
-            mNavigator?.unregisterServiceForNavUpdates()
-
-            navigator.cleanup()
         }
-        mNavigator = null
-        super.onDestroy()
     }
 
     private fun navigateToPlace(placeId: String) {
@@ -290,5 +286,49 @@ class MainActivity : AppCompatActivity() {
                 else -> showToast("Error starting guidance: $code")
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        navView.onStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        navView.onResume()
+    }
+
+    override fun onPause() {
+        navView.onPause()
+        super.onPause()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        navView.onConfigurationChanged(newConfig)
+    }
+
+    override fun onStop() {
+        navView.onStop()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        navView.onDestroy()
+        mNavigator?.also { navigator ->
+            if (arrivalListener != null) {
+                navigator.removeArrivalListener(arrivalListener)
+            }
+            if (routeChangedListener != null) {
+                navigator.removeRouteChangedListener(routeChangedListener)
+            }
+            navigator.simulator?.unsetUserLocation()
+
+            mNavigator?.unregisterServiceForNavUpdates()
+
+            navigator.cleanup()
+        }
+        mNavigator = null
+        super.onDestroy()
     }
 }

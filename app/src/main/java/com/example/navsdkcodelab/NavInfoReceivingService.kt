@@ -23,6 +23,9 @@ class NavInfoReceivingService : Service() {
     private val esp32MacAddress = "94:E6:86:3C:E3:AE"
     private val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
+    /**
+     * Verbindt met het ESP32-apparaat via Bluetooth.
+     */
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun connectToEsp32() {
         val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -33,7 +36,7 @@ class NavInfoReceivingService : Service() {
 
         val device: BluetoothDevice? = adapter.getRemoteDevice(esp32MacAddress)
         if (device == null) {
-            Log.e("NavService", "Bluetooth-apparaat niet gevonden")
+            Log.e("NavService", "Bluetooth-apparaat met adres $esp32MacAddress niet gevonden")
             return
         }
 
@@ -47,7 +50,12 @@ class NavInfoReceivingService : Service() {
         }
     }
 
-    private fun sendNavInfoToESP32(instruction: String, distanceToNextStep: Int) {
+    /**
+     * Verzendt navigatie-informatie naar het ESP32-apparaat.
+     * @param instruction De instructie die naar het apparaat moet worden gestuurd.
+     * @param distanceToNextStep De afstand naar de volgende stap in meters.
+     */
+    private fun sendNavInfoToESP32(instruction: Int, distanceToNextStep: Int) {
         if (outputStream == null) {
             Log.w("NavService", "Bluetooth niet verbonden, kan niks versturen")
             return
@@ -62,39 +70,68 @@ class NavInfoReceivingService : Service() {
         }
     }
 
+    /**
+     * Verwerkt inkomende navigatie-informatie.
+     */
     private inner class IncomingNavStepHandler(looper: Looper) : Handler(looper) {
+        private var lastInstruction: Int? = null
+        private var lastDistance: Int? = null
+        private var lastTimestamp: Long = 0
+        private val minIntervalMs = 1000L  // Minimum interval tussen berichten in milliseconden (bijv. 1 seconde)
+        private val destinationReachedThreshold = 1 // Drempel in meters voor bestemming bereikt
+
         override fun handleMessage(msg: Message) {
             if (msg.what == TurnByTurnManager.MSG_NAV_INFO) {
                 val navInfo = turnByTurnManager.readNavInfoFromBundle(msg.data)
 
-//                val instruction = navInfo.currentStep.maneuver
-                val instruction = navInfo.currentStep.fullInstructionText
-                val distanceToNextStep = navInfo.distanceToCurrentStepMeters
+                val instruction = navInfo.currentStep.maneuver
+                val distanceToNextStep = navInfo.distanceToCurrentStepMeters.toInt()
+                val currentTimestamp = System.currentTimeMillis()
 
-                Log.d("NavService", "Richting: $instruction")
-                Log.d("NavService", "Afstand tot volgende stap: $distanceToNextStep")
+                // Controleer of er voldoende tijd is verstreken en of er een verandering is in instructie of afstand
+                if (currentTimestamp - lastTimestamp >= minIntervalMs &&
+                    (instruction != lastInstruction || distanceToNextStep != lastDistance)) {
 
-                sendNavInfoToESP32(instruction, distanceToNextStep)
+                    // Controleer of de bestemming bereikt is
+                    if (distanceToNextStep <= destinationReachedThreshold) {
+                        Log.d("NavService", "Bestemming bereikt!")
+                        sendNavInfoToESP32(-1, 0)  // Stuur een bericht dat de bestemming is bereikt
+                    } else {
+                        Log.d("NavService", "Richting: $instruction")
+                        Log.d("NavService", "Afstand tot volgende stap: $distanceToNextStep")
+
+                        sendNavInfoToESP32(instruction, distanceToNextStep)
+                    }
+
+                    // Update de laatst verstuurde instructie, afstand en tijd
+                    lastInstruction = instruction
+                    lastDistance = distanceToNextStep
+                    lastTimestamp = currentTimestamp
+                }
             }
         }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onCreate() {
         super.onCreate()
         turnByTurnManager = TurnByTurnManager.createInstance()
 
-        val thread = HandlerThread("NavInfoReceivingService", Process.THREAD_PRIORITY_DEFAULT)
-        thread.start()
+        // Start een nieuwe thread om berichten van de TurnByTurnManager te ontvangen
+        val thread = HandlerThread("NavInfoReceivingService", Process.THREAD_PRIORITY_DEFAULT).apply { start() }
         incomingMessenger = Messenger(IncomingNavStepHandler(thread.looper))
 
+        // Maak verbinding met het ESP32-apparaat
         connectToEsp32()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         try {
+            // Sluit de Bluetooth-verbinding netjes af
             outputStream?.close()
             bluetoothSocket?.close()
+            Log.d("NavService", "Bluetooth verbinding gesloten.")
         } catch (e: Exception) {
             Log.e("NavService", "Fout bij sluiten van Bluetooth: ${e.message}")
         }
