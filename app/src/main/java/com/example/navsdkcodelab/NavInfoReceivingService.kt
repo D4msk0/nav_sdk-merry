@@ -20,8 +20,12 @@ class NavInfoReceivingService : Service() {
 
     private var bluetoothSocket: BluetoothSocket? = null
     private var outputStream: OutputStream? = null
-    private val esp32MacAddress = "94:E6:86:3C:E3:AE"
+    // ESP Disk
+//    private val esp32MacAddress = "94:E6:86:3C:E3:AE"
+    //ESP HAT
+    private val esp32MacAddress = "94:E6:86:3C:70:0E"
     private val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
 
     /**
      * Verbindt met het ESP32-apparaat via Bluetooth.

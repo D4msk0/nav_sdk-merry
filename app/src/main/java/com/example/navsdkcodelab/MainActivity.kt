@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
 
     private var googleMap: GoogleMap? = null
 
-    private val isSimulationMode get() = false
+    private val isSimulationMode get() = true
 
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
