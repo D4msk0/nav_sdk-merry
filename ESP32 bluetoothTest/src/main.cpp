@@ -4,27 +4,26 @@
 #include "esp_bt_device.h"
 
 // Configuratie
-#define LED_PIN     2       // Pas aan naar jouw LED-data pin
-#define NUM_LEDS    24
+#define LED_PIN     2
+#define NUM_LEDS    21
 
 BluetoothSerial SerialBT;
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
-
-// Functie-declaraties
-void handleInstruction(int instruction, int distance);
-void colorWipe(uint32_t color, int wait);
-void rotateLeft(uint32_t color);
-void rotateRight(uint32_t color);
-void fillSolid(uint32_t color);
 
 // Maneuver codes (zoals gedefinieerd in Google Maps SDK)
 #define TURN_LEFT 6
 #define TURN_RIGHT 7
 
-// Variabelen voor afstand en instructie
-int previousInstruction = -1;
-int previousDistance = 0;
-const int DISTANCE_THRESHOLD = 50; // Drempel voor bochten (in meters)
+// Parameters
+const int DISTANCE_THRESHOLD = 50; // Afstand waaronder animatie-pijl getoond wordt
+const int MAX_DISTANCE = 300;      // Afstand voor maximale progressie (alles vol)
+
+// Functies
+void handleInstruction(int instruction, int distance);
+void fillSolid(uint32_t color);
+void animateArrowLeft(uint32_t color);
+void animateArrowRight(uint32_t color);
+int mapDistanceToLeds(int distance, int maxDistance);
 
 void setup() {
   Serial.begin(115200);
@@ -39,8 +38,9 @@ void setup() {
   Serial.println(macStr);
 
   strip.begin();
-  strip.show(); // Alle leds uit
-  strip.setBrightness(20); // Pas eventueel aan
+  strip.clear();
+  strip.show();
+  strip.setBrightness(5);
 }
 
 void loop() {
@@ -53,7 +53,6 @@ void loop() {
     int distance = 0;
 
     if (sscanf(input.c_str(), "Instructie: %d, Afstand: %dm", &instruction, &distance) == 2) {
-      // Controleer of de instructie anders is dan de vorige en dat de afstand onder de drempel is
       handleInstruction(instruction, distance);
     } else {
       Serial.println("Ongeldig formaat ontvangen.");
@@ -63,62 +62,41 @@ void loop() {
   delay(50);
 }
 
-// Verwerk navigatie-instructie
 void handleInstruction(int instruction, int distance) {
   strip.clear();
 
   if (instruction == -1) {
-    // Bestemming bereikt – groen flitsen
     for (int i = 0; i < 3; i++) {
-      colorWipe(strip.Color(0, 255, 0), 20); // Groen voor bestemming
-      colorWipe(strip.Color(0, 0, 0), 20); // Lichten uit
+      fillSolid(strip.Color(0, 255, 0)); delay(150);
+      fillSolid(strip.Color(0, 0, 0)); delay(150);
     }
-  } else if (instruction == TURN_LEFT) {
-    if (distance < DISTANCE_THRESHOLD) {
-      // Actieve animatie voor linksaf als de afstand laag genoeg is
-      rotateLeft(strip.Color(0, 255, 0)); // Groen voor linksaf
-    } else {
-      fillSolid(strip.Color(0, 255, 0)); // Neutrale kleur als afstand groot is
+    return;
+  }
+
+  if (distance < DISTANCE_THRESHOLD) {
+    if (instruction == TURN_LEFT) animateArrowLeft(strip.Color(0, 255, 0));
+    else if (instruction == TURN_RIGHT) animateArrowRight(strip.Color(0, 255, 0));
+    else fillSolid(strip.Color(1, 0, 0));
+    return;
+  }
+
+  int ledsToLight = mapDistanceToLeds(distance, MAX_DISTANCE);
+
+  if (instruction == TURN_LEFT) {
+    for (int i = 0; i < ledsToLight; i++) {
+      strip.setPixelColor(i, strip.Color(0, 80, 0));
     }
   } else if (instruction == TURN_RIGHT) {
-    if (distance < DISTANCE_THRESHOLD) {
-      // Actieve animatie voor rechtsaf als de afstand laag genoeg is
-      rotateRight(strip.Color(0, 255, 0)); // Groen voor rechtsaf
-    } else {
-      fillSolid(strip.Color(0, 255, 0)); // Neutrale kleur als afstand groot is
+    for (int i = 0; i < ledsToLight; i++) {
+      strip.setPixelColor(NUM_LEDS - 1 - i, strip.Color(0, 80, 0));
     }
   } else {
-    fillSolid(strip.Color(255, 255, 255)); // Onbekend = wit
+    // fillSolid(strip.Color(50, 50, 50));
+    strip.clear();
+    strip.show();
   }
 
   strip.show();
-}
-
-// Helfuncties
-void colorWipe(uint32_t color, int wait) {
-  for (int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, color);
-    strip.show();
-    delay(wait);
-  }
-}
-
-void rotateRight(uint32_t color) {
-  for (int i = 0; i < strip.numPixels(); i++) {
-    strip.clear();
-    strip.setPixelColor(i, color);
-    strip.show();
-    delay(40);
-  }
-}
-
-void rotateLeft(uint32_t color) {
-  for (int i = strip.numPixels() - 1; i >= 0; i--) {
-    strip.clear();
-    strip.setPixelColor(i, color);
-    strip.show();
-    delay(40);
-  }
 }
 
 void fillSolid(uint32_t color) {
@@ -126,4 +104,33 @@ void fillSolid(uint32_t color) {
     strip.setPixelColor(i, color);
   }
   strip.show();
+}
+
+void animateArrowLeft(uint32_t color) {
+  for (int offset = 0; offset < NUM_LEDS / 2; offset++) {
+    strip.clear();
+    for (int i = 0; i < 3; i++) {
+      int pos = offset - i;
+      if (pos >= 0) strip.setPixelColor(pos, color);
+    }
+    strip.show();
+    delay(60);
+  }
+}
+
+void animateArrowRight(uint32_t color) {
+  for (int offset = NUM_LEDS - 1; offset >= NUM_LEDS / 2; offset--) {
+    strip.clear();
+    for (int i = 0; i < 3; i++) {
+      int pos = offset + i;
+      if (pos < NUM_LEDS) strip.setPixelColor(pos, color);
+    }
+    strip.show();
+    delay(60);
+  }
+}
+
+int mapDistanceToLeds(int distance, int maxDistance) {
+  int capped = min(distance, maxDistance);
+  return map(maxDistance - capped, 0, maxDistance, 0, NUM_LEDS / 2);
 }
