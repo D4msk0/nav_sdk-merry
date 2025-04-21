@@ -47,7 +47,7 @@ class NavInfoReceivingService : Service() {
         }
     }
 
-    private fun sendNavInfoToESP32(instruction: Int, distanceToNextStep: Int) {
+    private fun sendNavInfoToESP32(instruction: String, distanceToNextStep: Int) {
         if (outputStream == null) {
             Log.w("NavService", "Bluetooth niet verbonden, kan niks versturen")
             return
@@ -67,7 +67,8 @@ class NavInfoReceivingService : Service() {
             if (msg.what == TurnByTurnManager.MSG_NAV_INFO) {
                 val navInfo = turnByTurnManager.readNavInfoFromBundle(msg.data)
 
-                val instruction = navInfo.currentStep.maneuver
+//                val instruction = navInfo.currentStep.maneuver
+                val instruction = navInfo.currentStep.fullInstructionText
                 val distanceToNextStep = navInfo.distanceToCurrentStepMeters
 
                 Log.d("NavService", "Richting: $instruction")
