@@ -26,9 +26,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.navigation.NavigationApi
 import com.google.android.libraries.navigation.NavigationView
 import com.google.android.libraries.navigation.Navigator
+import com.google.android.libraries.navigation.SimulationOptions
+import com.google.android.libraries.navigation.Waypoint
 
 
 class MainActivity : AppCompatActivity() {
@@ -36,9 +39,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navView: NavigationView
     private var arrivalListener: Navigator.ArrivalListener? = null
     private var routeChangedListener: Navigator.RouteChangedListener? = null
+    private val isSimulationMode get() = true
 
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
+        val startLocation = LatLng(49.2847001, -123.1145098)
+        const val WEST_POINT_GREY = "ChIJS09_Ne5yhlQRK1JX6bCnfn0"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,6 +106,10 @@ class MainActivity : AppCompatActivity() {
                     registerNavigationListeners()
                     navigator.setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)
                     setupCameraFollowMyLocation()
+                    if (isSimulationMode) {
+                        mNavigator?.simulator?.setUserLocation(startLocation)
+                    }
+                    navigateToPlace(WEST_POINT_GREY)
                 }
 
                 override fun onError(@NavigationApi.ErrorCode errorCode: Int) {
@@ -179,5 +189,35 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         navView.onDestroy()
         super.onDestroy()
+    }
+
+    private fun navigateToPlace(placeId: String) {
+        val waypoint: Waypoint? =
+            try {
+                Waypoint.builder().setPlaceIdString(placeId).build()
+            } catch (e: Waypoint.UnsupportedPlaceIdException) {
+                showToast("Place ID was unsupported.")
+                return
+            }
+        val pendingRoute = mNavigator?.setDestination(waypoint)
+        pendingRoute?.setOnResultListener { code ->
+            when (code) {
+                Navigator.RouteStatus.OK -> {
+                    supportActionBar?.hide()
+                    mNavigator?.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE)
+                    mNavigator?.startGuidance()
+
+                    if (isSimulationMode) {
+                        mNavigator
+                            ?.simulator
+                            ?.simulateLocationsAlongExistingRoute(SimulationOptions().speedMultiplier(5f))
+                    }
+                }
+                Navigator.RouteStatus.ROUTE_CANCELED -> showToast("Route guidance canceled.")
+                Navigator.RouteStatus.NO_ROUTE_FOUND,
+                Navigator.RouteStatus.NETWORK_ERROR -> showToast("Error starting guidance: $code")
+                else -> showToast("Error starting guidance: $code")
+            }
+        }
     }
 }
