@@ -43,8 +43,9 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
-        val startLocation = LatLng(49.2847001, -123.1145098)
-        const val WEST_POINT_GREY = "ChIJS09_Ne5yhlQRK1JX6bCnfn0"
+//        val startLocation = LatLng(49.2847001, -123.1145098)
+        val START_LOCATION = LatLng(51.44440676010944, 5.46379722510205)
+        const val END_LOCATION = "ChIJH8FSaBzZxkcRZWlh32Nlj40"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,9 +108,9 @@ class MainActivity : AppCompatActivity() {
                     navigator.setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)
                     setupCameraFollowMyLocation()
                     if (isSimulationMode) {
-                        mNavigator?.simulator?.setUserLocation(startLocation)
+                        mNavigator?.simulator?.setUserLocation(START_LOCATION)
                     }
-                    navigateToPlace(WEST_POINT_GREY)
+                    navigateToPlace(END_LOCATION)
                 }
 
                 override fun onError(@NavigationApi.ErrorCode errorCode: Int) {
