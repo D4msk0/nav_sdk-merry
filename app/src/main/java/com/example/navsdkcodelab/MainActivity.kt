@@ -104,6 +104,20 @@ class MainActivity : AppCompatActivity() {
             object : NavigationApi.NavigatorListener {
                 override fun onNavigatorReady(navigator: Navigator) {
                     mNavigator = navigator
+
+                    val registered = mNavigator?.registerServiceForNavUpdates(
+                        packageName,
+                        NavInfoReceivingService::class.java.name,
+                        1 // of 2, afhankelijk van hoeveel stappen je vooruit wilt ontvangen
+                    )
+
+                    if (registered == true) {
+                        showToast("NavInfoReceivingService geregistreerd voor nav-updates")
+                    } else {
+                        showToast("Registratie van NavInfoReceivingService is mislukt")
+                    }
+
+
                     registerNavigationListeners()
                     navigator.setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)
                     setupCameraFollowMyLocation()
@@ -197,6 +211,9 @@ class MainActivity : AppCompatActivity() {
                 navigator.removeRouteChangedListener(routeChangedListener)
             }
             navigator.simulator?.unsetUserLocation()
+
+            mNavigator?.unregisterServiceForNavUpdates()
+
             navigator.cleanup()
         }
         mNavigator = null
