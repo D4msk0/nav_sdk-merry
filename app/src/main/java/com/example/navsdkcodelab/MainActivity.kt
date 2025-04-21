@@ -25,6 +25,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.gms.maps.GoogleMap
 import com.google.android.libraries.navigation.NavigationApi
 import com.google.android.libraries.navigation.NavigationView
 import com.google.android.libraries.navigation.Navigator
@@ -33,6 +34,8 @@ import com.google.android.libraries.navigation.Navigator
 class MainActivity : AppCompatActivity() {
     private var mNavigator: Navigator? = null
     private lateinit var navView: NavigationView
+    private var arrivalListener: Navigator.ArrivalListener? = null
+    private var routeChangedListener: Navigator.RouteChangedListener? = null
 
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
@@ -94,6 +97,9 @@ class MainActivity : AppCompatActivity() {
             object : NavigationApi.NavigatorListener {
                 override fun onNavigatorReady(navigator: Navigator) {
                     mNavigator = navigator
+                    registerNavigationListeners()
+                    navigator.setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)
+                    setupCameraFollowMyLocation()
                 }
 
                 override fun onError(@NavigationApi.ErrorCode errorCode: Int) {
@@ -122,6 +128,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun showToast(errorMessage: String) {
         Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+    }
+
+    private fun registerNavigationListeners() {
+        arrivalListener =
+            Navigator.ArrivalListener { // Show an onscreen message
+                showToast("User has arrived at the destination!")
+                mNavigator?.clearDestinations()
+            }
+        mNavigator?.addArrivalListener(arrivalListener)
+        routeChangedListener =
+            Navigator.RouteChangedListener { // Show an onscreen message when the route changes
+                showToast("onRouteChanged: the driver's route changed")
+            }
+        mNavigator?.addRouteChangedListener(routeChangedListener)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun setupCameraFollowMyLocation() {
+        navView.getMapAsync { googleMap ->
+            googleMap.followMyLocation(GoogleMap.CameraPerspective.TILTED)
+        }
     }
 
     override fun onStart() {
