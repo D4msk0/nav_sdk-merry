@@ -14,5 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <resources>
-    <string name="app_name">Nav SDK Codelab</string>
+    <string name="app_name">Navigation to LED demo</string>
+    <string name="simulation_mode_label">Simulation mode</string>
+    <string name="demo_hint_title">Navigation demo</string>
+    <string name="demo_hint_body">Tap the map to set a destination. The phone streams turn guidance to the ESP32 over Bluetooth and the LED strip reacts in real time.</string>
 </resources>

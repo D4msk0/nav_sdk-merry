@@ -14,7 +14,6 @@
 package com.example.navsdkcodelab
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -26,77 +25,54 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.android.gms.maps.GoogleMap
+import com.example.navsdkcodelab.navigation.NavigationController
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.libraries.navigation.NavigationApi
-import com.google.android.libraries.navigation.NavigationView
-import com.google.android.libraries.navigation.Navigator
-import com.google.android.libraries.navigation.SimulationOptions
-import com.google.android.libraries.navigation.Waypoint
-
 
 class MainActivity : AppCompatActivity() {
 
     private val requestBluetoothPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
             if (isGranted) {
-                Toast.makeText(this, "Bluetooth-toestemming verleend", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Bluetooth permission granted", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Bluetooth-toestemming geweigerd", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Bluetooth permission denied", Toast.LENGTH_LONG).show()
             }
         }
 
-    private var mNavigator: Navigator? = null
-    private lateinit var navView: NavigationView
-    private var arrivalListener: Navigator.ArrivalListener? = null
-    private var routeChangedListener: Navigator.RouteChangedListener? = null
-
-    private var googleMap: GoogleMap? = null
-
-//    private val isSimulationMode get() = true
+    private var restoredState: Bundle? = null
     private var isSimulationMode: Boolean = false
+
+    private lateinit var simulationSwitch: Switch
+    private lateinit var navigationController: NavigationController
+
     companion object {
         const val SPLASH_SCREEN_DELAY_MILLIS = 1000L
-//        val startLocation = LatLng(49.2847001, -123.1145098)
         val START_LOCATION = LatLng(51.44440676010944, 5.46379722510205)
         const val END_LOCATION = "ChIJH8FSaBzZxkcRZWlh32Nlj40"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoredState = savedInstanceState
         setContentView(R.layout.activity_main)
 
-        val simulationSwitch = findViewById<Switch>(R.id.simulation_mode_switch)
+        simulationSwitch = findViewById(R.id.simulation_mode_switch)
         simulationSwitch.setOnCheckedChangeListener { _, isChecked ->
             isSimulationMode = isChecked
-            Toast.makeText(this, "Simulatie: ${if (isChecked) "Aan" else "Uit"}", Toast.LENGTH_SHORT).show()
-
-            // Alleen als navigator al bestaat
-            mNavigator?.let { navigator ->
-                try {
-                    navigator.stopGuidance()
-                    navigator.clearDestinations()
-
-                    if (isSimulationMode) {
-                        navigator.simulator?.setUserLocation(START_LOCATION)
-                    } else {
-                        navigator.simulator?.unsetUserLocation()
-                    }
-
-                    navigateToPlace(END_LOCATION)
-                } catch (e: Exception) {
-                    showToast("Fout bij herstarten navigatie: ${e.message}")
-                    e.printStackTrace()
-                }
-            }
+            navigationController.setSimulationMode(isChecked)
+            showToast("Simulation: ${if (isChecked) "On" else "Off"}")
         }
 
+        navigationController = NavigationController(
+            activity = this,
+            navView = findViewById(R.id.navigation_view),
+            startLocation = START_LOCATION,
+            destinationPlaceId = END_LOCATION,
+            onToast = ::showToast
+        )
+
         checkBluetoothPermission()
-
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        navView = findViewById(R.id.navigation_view)
-        navView.onCreate(savedInstanceState)
         requestAccessPermissions()
     }
 
@@ -106,58 +82,46 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.BLUETOOTH_CONNECT
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Toestemming is al verleend
-                }
+                ) == PackageManager.PERMISSION_GRANTED -> Unit
 
                 shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT) -> {
                     Toast.makeText(
                         this,
-                        "Bluetooth-connectie is nodig voor communicatie met de ESP32",
+                        "Bluetooth permission is required to communicate with the ESP32",
                         Toast.LENGTH_LONG
                     ).show()
-
                     requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
                 }
 
-                else -> {
-                    // Vraag de permissie
-                    requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                }
+                else -> requestBluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
             }
         }
     }
 
-
     private fun requestAccessPermissions() {
-        val permissions =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.POST_NOTIFICATIONS
-                )
-            } else {
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-            }
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
         if (permissions.any { !checkPermissionGranted(it) }) {
-            if (permissions.any { shouldShowRequestPermissionRationale(it) }) {
-                // Display a dialogue explaining the required permissions.
-            }
-            val permissionsLauncher =
-                registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-                        permissionResults ->
-                    if (
-                        permissionResults.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)
-                    ) {
-                        onLocationPermissionGranted()
-                    } else {
-                        finish()
-                    }
+            val permissionsLauncher = registerForActivityResult(
+                ActivityResultContracts.RequestMultiplePermissions()
+            ) { permissionResults ->
+                if (permissionResults.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)) {
+                    onLocationPermissionGranted()
+                } else {
+                    finish()
                 }
+            }
+
             permissionsLauncher.launch(permissions)
         } else {
-            android.os
-                .Handler(Looper.getMainLooper())
+            android.os.Handler(Looper.getMainLooper())
                 .postDelayed({ onLocationPermissionGranted() }, SPLASH_SCREEN_DELAY_MILLIS)
         }
     }
@@ -166,195 +130,41 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.checkSelfPermission(this, permissionToCheck) == PackageManager.PERMISSION_GRANTED
 
     private fun onLocationPermissionGranted() {
-        initializeNavigationApi()
+        navigationController.initialize(restoredState)
     }
 
-    @SuppressLint("MissingPermission")
-    private fun initializeNavigationApi() {
-        val listener =
-            object : NavigationApi.NavigatorListener {
-                override fun onNavigatorReady(navigator: Navigator) {
-                    mNavigator = navigator
-
-                    val registered = mNavigator?.registerServiceForNavUpdates(
-                        packageName,
-                        NavInfoReceivingService::class.java.name,
-                        1 // of 2, afhankelijk van hoeveel stappen je vooruit wilt ontvangen
-                    )
-
-                    if (registered == true) {
-                        showToast("NavInfoReceivingService geregistreerd voor nav-updates")
-                    } else {
-                        showToast("Registratie van NavInfoReceivingService is mislukt")
-                    }
-
-
-                    registerNavigationListeners()
-                    navigator.setTaskRemovedBehavior(Navigator.TaskRemovedBehavior.QUIT_SERVICE)
-                    setupCameraFollowMyLocation()
-                    if (isSimulationMode) {
-                        mNavigator?.simulator?.setUserLocation(START_LOCATION)
-                    }
-                    navigateToPlace(END_LOCATION)
-                }
-
-                override fun onError(@NavigationApi.ErrorCode errorCode: Int) {
-                    when (errorCode) {
-                        NavigationApi.ErrorCode.NOT_AUTHORIZED -> {
-                            // Note: If this message is displayed, you may need to check that
-                            // your API_KEY is specified correctly in AndroidManifest.xml
-                            // and is been enabled to access the Navigation API
-                            showToast(
-                                "Error loading Navigation API: Your API key is " +
-                                        "invalid or not authorized to use Navigation."
-                            )
-                        }
-                        NavigationApi.ErrorCode.TERMS_NOT_ACCEPTED -> {
-                            showToast(
-                                "Error loading Navigation API: User did not " +
-                                        "accept the Navigation Terms of Use."
-                            )
-                        }
-                        else -> showToast("Error loading Navigation API: $errorCode")
-                    }
-                }
-            }
-        NavigationApi.getNavigator(this, listener)
-    }
-
-    private fun showToast(errorMessage: String) {
-        Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
-    }
-
-    private fun registerNavigationListeners() {
-        arrivalListener =
-            Navigator.ArrivalListener { // Show an onscreen message
-                showToast("User has arrived at the destination!")
-                mNavigator?.clearDestinations()
-            }
-        mNavigator?.addArrivalListener(arrivalListener)
-        routeChangedListener =
-            Navigator.RouteChangedListener { // Show an onscreen message when the route changes
-                showToast("onRouteChanged: the driver's route changed")
-            }
-        mNavigator?.addRouteChangedListener(routeChangedListener)
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun setupCameraFollowMyLocation() {
-        navView.getMapAsync { map ->
-            googleMap = map
-            map.followMyLocation(GoogleMap.CameraPerspective.TILTED)
-
-            // Alleen in normale modus (niet simulatie)
-            if (!isSimulationMode) {
-                // Bij klikken op de kaart wordt de eindlocatie ingesteld
-                map.setOnMapClickListener { latLng ->
-                    showToast("Klik op kaart: ${latLng.latitude}, ${latLng.longitude}")
-                    navigateToLatLng(latLng)  // Dit was de functie die we vervolgens aanriepen
-                }
-            }
-        }
-    }
-
-    private fun navigateToLatLng(latLng: LatLng) {
-        // Haal de latitude en longitude uit de Google Maps LatLng
-        val latitude = latLng.latitude
-        val longitude = latLng.longitude
-
-        // Stel de waypoint in met de juiste lat/long als Doubles
-        val waypoint = Waypoint.builder()
-            .setLatLng(latitude, longitude)  // Geef de lat/long als Double
-            .build()
-
-        val pendingRoute = mNavigator?.setDestination(waypoint)
-
-        pendingRoute?.setOnResultListener { code ->
-            when (code) {
-                Navigator.RouteStatus.OK -> {
-                    supportActionBar?.hide()
-                    mNavigator?.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE)
-                    mNavigator?.startGuidance()
-                }
-                Navigator.RouteStatus.ROUTE_CANCELED -> showToast("Route guidance canceled.")
-                Navigator.RouteStatus.NO_ROUTE_FOUND,
-                Navigator.RouteStatus.NETWORK_ERROR -> showToast("Error starting guidance: $code")
-                else -> showToast("Error starting guidance: $code")
-            }
-        }
-    }
-
-    private fun navigateToPlace(placeId: String) {
-        val waypoint: Waypoint? =
-            try {
-                Waypoint.builder().setPlaceIdString(placeId).build()
-            } catch (e: Waypoint.UnsupportedPlaceIdException) {
-                showToast("Place ID was unsupported.")
-                return
-            }
-        val pendingRoute = mNavigator?.setDestination(waypoint)
-        pendingRoute?.setOnResultListener { code ->
-            when (code) {
-                Navigator.RouteStatus.OK -> {
-                    supportActionBar?.hide()
-                    mNavigator?.setAudioGuidance(Navigator.AudioGuidance.VOICE_ALERTS_AND_GUIDANCE)
-                    mNavigator?.startGuidance()
-
-                    if (isSimulationMode) {
-                        mNavigator
-                            ?.simulator
-                            ?.simulateLocationsAlongExistingRoute(SimulationOptions().speedMultiplier(5f))
-                    }
-                }
-                Navigator.RouteStatus.ROUTE_CANCELED -> showToast("Route guidance canceled.")
-                Navigator.RouteStatus.NO_ROUTE_FOUND,
-                Navigator.RouteStatus.NETWORK_ERROR -> showToast("Error starting guidance: $code")
-                else -> showToast("Error starting guidance: $code")
-            }
-        }
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     override fun onStart() {
         super.onStart()
-        navView.onStart()
+        navigationController.onStart()
     }
 
     override fun onResume() {
         super.onResume()
-        navView.onResume()
+        navigationController.onResume()
     }
 
     override fun onPause() {
-        navView.onPause()
+        navigationController.onPause()
         super.onPause()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        navView.onConfigurationChanged(newConfig)
+        navigationController.onConfigurationChanged(newConfig)
     }
 
     override fun onStop() {
-        navView.onStop()
+        navigationController.onStop()
         super.onStop()
     }
 
     override fun onDestroy() {
-        navView.onDestroy()
-        mNavigator?.also { navigator ->
-            if (arrivalListener != null) {
-                navigator.removeArrivalListener(arrivalListener)
-            }
-            if (routeChangedListener != null) {
-                navigator.removeRouteChangedListener(routeChangedListener)
-            }
-            navigator.simulator?.unsetUserLocation()
-
-            mNavigator?.unregisterServiceForNavUpdates()
-
-            navigator.cleanup()
-        }
-        mNavigator = null
+        navigationController.cleanup()
         super.onDestroy()
     }
 }
+

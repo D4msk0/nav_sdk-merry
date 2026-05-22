@@ -7,7 +7,7 @@
         android:id="@+id/simulation_mode_switch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Simulatie aan"
+        android:text="@string/simulation_mode_label"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
         android:layout_margin="16dp"
@@ -16,7 +16,36 @@
     <com.google.android.libraries.navigation.NavigationView
         android:id="@+id/navigation_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/simulation_mode_switch" />
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:id="@+id/demo_hint_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="24dp"
+        android:background="#CC1F1F1F"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/demo_hint_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/demo_hint_title"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/demo_hint_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/demo_hint_body"
+            android:textColor="#F5F5F5"
+            android:textSize="14sp" />
+    </LinearLayout>
 
 </RelativeLayout>
